@@ -7,11 +7,13 @@ on:
       - community/remove-salesforce-dependency
     tags:
       - 'v*-community.*'
+      - 'v*'
   workflow_dispatch:
 
 env:
-  IMAGE_NAME: takinosh/babylon-catalog-api
+  IMAGE_NAME: babylon-catalog-api
   IMAGE_REGISTRY: quay.io
+  QUAY_NAMESPACE: takinosh
   DOCKERFILE_PATH: catalog/api/Containerfile
 
 jobs:
@@ -51,14 +53,14 @@ jobs:
           file: ./catalog/api/Containerfile
           push: true
           tags: |
-            ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
-            ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.sha }}
-            ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_REGISTRY }}/${{ env.QUAY_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
+            ${{ env.IMAGE_REGISTRY }}/${{ env.QUAY_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.sha }}
+            ${{ env.IMAGE_REGISTRY }}/${{ env.QUAY_NAMESPACE }}/${{ env.IMAGE_NAME }}:latest
           platforms: linux/amd64,linux/arm64
 
       - name: Image details
         run: |
           echo "Published images:"
-          echo "  - ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}"
-          echo "  - ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.sha }}"
-          echo "  - ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          echo "  - ${{ env.IMAGE_REGISTRY }}/${{ env.QUAY_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}"
+          echo "  - ${{ env.IMAGE_REGISTRY }}/${{ env.QUAY_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.sha }}"
+          echo "  - ${{ env.IMAGE_REGISTRY }}/${{ env.QUAY_NAMESPACE }}/${{ env.IMAGE_NAME }}:latest"

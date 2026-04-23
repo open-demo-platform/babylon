@@ -28,7 +28,11 @@ system_status_configmap_name = os.environ.get('SYSTEM_STATUS_CONFIGMAP', 'babylo
 groups = []
 groups_last_update = 0
 admin_api = os.environ.get('ADMIN_API', 'http://babylon-admin.babylon-admin.svc.cluster.local:8080')
+# CUSTOM: Community fork - graceful fallback when enterprise services disabled
+admin_api_enabled = os.environ.get('BABYLON_ADMIN_ENABLED', 'true').lower() == 'true'
 ratings_api = os.environ.get('RATINGS_API', 'http://babylon-ratings.babylon-ratings.svc.cluster.local:8080')
+# CUSTOM: Community fork - graceful fallback when enterprise services disabled
+ratings_api_enabled = os.environ.get('BABYLON_RATINGS_ENABLED', 'true').lower() == 'true'
 reporting_api = os.environ.get('SALESFORCE_API', 'http://reporting-api.demo-reporting.svc.cluster.local:8080')
 sandbox_api = os.environ.get('SANDBOX_API', 'http://sandbox-api.babylon-sandbox-api.svc.cluster.local:8080')
 sandbox_api_authorization_token = os.environ.get('SANDBOX_AUTHORIZATION_TOKEN')
@@ -567,7 +571,12 @@ async def provision_rating_post(request):
 
 
 @routes.get("/api/user-manager/bookmarks")
-async def provision_rating_get(request):
+async def get_bookmarks(request):
+    # CUSTOM: Community fork - return empty bookmarks when ratings service disabled
+    if not ratings_api_enabled:
+        return web.json_response({
+            "bookmarks": []
+        })
     user = await get_proxy_user(request)
     email = user['metadata']['name']
     return await api_proxy(
@@ -578,6 +587,11 @@ async def provision_rating_get(request):
 
 @routes.post("/api/user-manager/bookmarks")
 async def bookmark_post(request):
+    # CUSTOM: Community fork - return empty bookmarks when ratings service disabled
+    if not ratings_api_enabled:
+        return web.json_response({
+            "bookmarks": []
+        }, status=201)
     user = await get_proxy_user(request)
     data = await request.json()
     data["email"] = user['metadata']['name']
@@ -590,6 +604,11 @@ async def bookmark_post(request):
 
 @routes.delete("/api/user-manager/bookmarks")
 async def bookmark_delete(request):
+    # CUSTOM: Community fork - return empty bookmarks when ratings service disabled
+    if not ratings_api_enabled:
+        return web.json_response({
+            "bookmarks": []
+        })
     user = await get_proxy_user(request)
     asset_uuid = request.query.get("asset_uuid")
     email = user['metadata']['name']
@@ -614,6 +633,16 @@ async def provision_rating_get_history(request):
 
 @routes.get("/api/admin/incidents")
 async def incidents_get(request):
+    # CUSTOM: Community fork - return empty incidents when admin service disabled
+    if not admin_api_enabled:
+        return web.json_response({
+            "kind": "IncidentList",
+            "apiVersion": "v1",
+            "metadata": {
+                "resourceVersion": ""
+            },
+            "items": []
+        })
     return await api_proxy(
         headers=request.headers,
         method="GET",

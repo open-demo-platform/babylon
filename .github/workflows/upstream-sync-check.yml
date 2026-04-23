@@ -1,0 +1,60 @@
+name: Check Upstream Babylon Updates
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Every Monday at 9 AM UTC
+  workflow_dispatch:
+
+jobs:
+  check-upstream:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/redhat-cop/babylon.git || true
+          git fetch upstream
+
+      - name: Check for upstream changes
+        id: check
+        run: |
+          COMMITS=$(git log HEAD..upstream/main --oneline | wc -l)
+          echo "commits=${COMMITS}" >> $GITHUB_OUTPUT
+
+          if [ $COMMITS -gt 0 ]; then
+            echo "has_updates=true" >> $GITHUB_OUTPUT
+            git log HEAD..upstream/main --oneline > upstream-changes.txt
+          else
+            echo "has_updates=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create issue for upstream updates
+        if: steps.check.outputs.has_updates == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const changes = fs.readFileSync('upstream-changes.txt', 'utf8');
+
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Upstream Updates Available (${process.env.COMMITS} commits)`,
+              body: `## Upstream Changes Detected\n\n` +
+                    `The upstream \`redhat-cop/babylon\` repository has ${process.env.COMMITS} new commits.\n\n` +
+                    `### Recent Commits\n\`\`\`\n${changes}\n\`\`\`\n\n` +
+                    `### Action Required\n` +
+                    `1. Review changes: \`git log HEAD..upstream/main\`\n` +
+                    `2. Merge if safe: \`git merge --no-ff upstream/main\`\n` +
+                    `3. Test custom patches still work\n` +
+                    `4. Rebuild and publish container if needed\n\n` +
+                    `See ADR-0014 for fork maintenance procedures.`,
+              labels: ['upstream-sync', 'maintenance']
+            });
+        env:
+          COMMITS: ${{ steps.check.outputs.commits }}

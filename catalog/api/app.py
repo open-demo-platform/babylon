@@ -181,6 +181,35 @@ async def check_user_support_access(api_client):
     return await check_api_access(api_client, "poolboy.gpte.redhat.com", "resourceclaims", "patch")
 
 async def get_catalog_namespaces(api_client):
+    # CUSTOM: Community fork - support environment variable fallback when Salesforce disabled
+    if os.environ.get('SALESFORCE_ENABLED', 'true').lower() == 'false':
+        # Use DEFAULT_CATALOG_NAMESPACES environment variable (comma-separated list)
+        default_namespaces = os.environ.get('DEFAULT_CATALOG_NAMESPACES', '')
+        if default_namespaces:
+            namespaces = []
+            for ns_name in default_namespaces.split(','):
+                ns_name = ns_name.strip()
+                if ns_name:
+                    # Try to get namespace metadata for display name and description
+                    try:
+                        ns = await core_v1_api.read_namespace(ns_name)
+                        namespaces.append({
+                            'name': ns.metadata.name,
+                            'displayName': ns.metadata.annotations.get('openshift.io/display-name', ns.metadata.name),
+                            'description': ns.metadata.annotations.get('openshift.io/description', f"Catalog {ns.metadata.name}")
+                        })
+                    except Exception:
+                        # If namespace doesn't exist or can't be read, add with basic info
+                        namespaces.append({
+                            'name': ns_name,
+                            'displayName': ns_name,
+                            'description': f"Catalog {ns_name}"
+                        })
+            return namespaces
+        # If no DEFAULT_CATALOG_NAMESPACES set, return empty list
+        return []
+
+    # Original Kubernetes RBAC logic (unchanged)
     namespaces = []
     namespace_list = await core_v1_api.list_namespace(
         label_selector = f"babylon.gpte.redhat.com/interface={interface_name}" if interface_name else 'babylon.gpte.redhat.com/catalog'

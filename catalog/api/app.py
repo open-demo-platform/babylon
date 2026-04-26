@@ -635,14 +635,7 @@ async def provision_rating_get_history(request):
 async def incidents_get(request):
     # CUSTOM: Community fork - return empty incidents when admin service disabled
     if not admin_api_enabled:
-        return web.json_response({
-            "kind": "IncidentList",
-            "apiVersion": "v1",
-            "metadata": {
-                "resourceVersion": ""
-            },
-            "items": []
-        })
+        return web.json_response([])
     return await api_proxy(
         headers=request.headers,
         method="GET",

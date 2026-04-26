@@ -1,0 +1,5 @@
+# Test dependencies for babylon-catalog-api
+pytest==8.1.1
+pytest-asyncio==0.23.6
+pytest-aiohttp==1.0.5
+aioresponses==0.7.6

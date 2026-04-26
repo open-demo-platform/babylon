@@ -34,6 +34,8 @@ ratings_api = os.environ.get('RATINGS_API', 'http://babylon-ratings.babylon-rati
 # CUSTOM: Community fork - graceful fallback when enterprise services disabled
 ratings_api_enabled = os.environ.get('BABYLON_RATINGS_ENABLED', 'true').lower() == 'true'
 reporting_api = os.environ.get('SALESFORCE_API', 'http://reporting-api.demo-reporting.svc.cluster.local:8080')
+# CUSTOM: Community fork - graceful fallback when reporting/Salesforce service disabled
+reporting_api_enabled = os.environ.get('SALESFORCE_ENABLED', 'true').lower() == 'true'
 sandbox_api = os.environ.get('SANDBOX_API', 'http://sandbox-api.babylon-sandbox-api.svc.cluster.local:8080')
 sandbox_api_authorization_token = os.environ.get('SANDBOX_AUTHORIZATION_TOKEN')
 reporting_api_authorization_token = os.environ.get('SALESFORCE_AUTHORIZATION_TOKEN')
@@ -841,6 +843,12 @@ async def catalog_item_metrics(request):
 
 @routes.get("/api/catalog_incident/active-incidents")
 async def catalog_item_active_incidents(request):
+    # CUSTOM: Community fork - return empty items when reporting service disabled
+    if not reporting_api_enabled:
+        return web.json_response({
+            "items": []
+        })
+
     stage = request.query.get("stage")
     queryString = ""
     if stage:

@@ -54,14 +54,81 @@ async def get_catalog_namespaces(api_client):
     # ... rest of original implementation
 ```
 
+### 2. catalog/api/app.py (Lines ~36-37, ~845-860)
+
+**Change**: Added graceful fallbacks for enterprise service endpoints
+
+**Reason**: Prevent frontend crashes when enterprise services (admin, ratings, reporting) are not configured.
+
+**Implementation**:
+
+**A. Environment Flag (Lines ~36-37)**:
+```python
+reporting_api = os.environ.get('SALESFORCE_API', 'http://reporting-api.demo-reporting.svc.cluster.local:8080')
+# CUSTOM: Community fork - graceful fallback when reporting/Salesforce service disabled
+reporting_api_enabled = os.environ.get('SALESFORCE_ENABLED', 'true').lower() == 'true'
+```
+
+**B. Catalog Incident Endpoint Fallback (Lines ~845-860)**:
+```python
+@routes.get("/api/catalog_incident/active-incidents")
+async def catalog_item_active_incidents(request):
+    # CUSTOM: Community fork - return empty items when reporting service disabled
+    if not reporting_api_enabled:
+        return web.json_response({
+            "items": []
+        })
+
+    stage = request.query.get("stage")
+    queryString = ""
+    if stage:
+        queryString = f"?stage={stage}"
+    headers = {
+        "Authorization": f"Bearer {reporting_api_authorization_token}"
+    }
+    return await api_proxy(
+        headers=headers,
+        method="GET",
+        url=f"{reporting_api}/catalog_incident/active-incidents{queryString}",
+    )
+```
+
+**Frontend Error Fixed**:
+```
+TypeError: Cannot read properties of undefined (reading 'find')
+  at Catalog.tsx:440
+```
+
+Frontend expects `CatalogItemIncidents` interface:
+```typescript
+interface CatalogItemIncidents {
+  items: CatalogItemIncident[];
+}
+```
+
 ## Environment Variables
 
 ### New Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SALESFORCE_ENABLED` | `true` | Set to `false` to disable Salesforce dependency and use DEFAULT_CATALOG_NAMESPACES |
+| `SALESFORCE_ENABLED` | `true` | Set to `false` to disable Salesforce/reporting API dependency |
 | `DEFAULT_CATALOG_NAMESPACES` | `""` | Comma-separated list of catalog namespaces to expose (e.g., `babylon-catalog,test-catalog`) |
+| `BABYLON_ADMIN_ENABLED` | `true` | Set to `false` to disable admin API dependency (incidents) |
+| `BABYLON_RATINGS_ENABLED` | `true` | Set to `false` to disable ratings API dependency (bookmarks) |
+
+### Affected Endpoints
+
+When enterprise services are disabled, these endpoints return empty responses instead of proxying:
+
+| Endpoint | Disabled When | Returns |
+|----------|---------------|---------|
+| `/api/catalog_incident/active-incidents` | `SALESFORCE_ENABLED=false` | `{"items": []}` |
+| `/api/admin/incidents` | `BABYLON_ADMIN_ENABLED=false` | `[]` |
+| `/api/user-manager/bookmarks` (GET) | `BABYLON_RATINGS_ENABLED=false` | `{"bookmarks": []}` |
+| `/api/user-manager/bookmarks` (POST) | `BABYLON_RATINGS_ENABLED=false` | `{"bookmarks": []}` |
+| `/api/user-manager/bookmarks` (DELETE) | `BABYLON_RATINGS_ENABLED=false` | `{"bookmarks": []}` |
+| `/auth/session` catalogNamespaces | `SALESFORCE_ENABLED=false` | Uses `DEFAULT_CATALOG_NAMESPACES` |
 
 ### Example Configuration
 
@@ -205,14 +272,26 @@ Workflow file: `.github/workflows/build-babylon-catalog-api.yml`
 
 ## Version Tracking
 
-**Current Community Fork Version**: v0.42.6-community.1
+**Current Community Fork Version**: v0.42.6-community.4
 
 **Versioning Format**: `v{UPSTREAM_VERSION}-community.{PATCH_NUMBER}`
 - `UPSTREAM_VERSION`: Version from upstream babylon (e.g., v0.42.6)
 - `PATCH_NUMBER`: Community fork patch number (increments with each release)
 
 **Version History**:
+- `v0.42.6-community.4` (2026-04-26): Add Python tests + fix catalog_incident endpoint
+  - Added pytest test suite for enterprise fallback endpoints
+  - Fixed `/api/catalog_incident/active-incidents` to return `{items: []}`
+  - Prevents frontend crash: "TypeError: Cannot read properties of undefined (reading 'find')"
+  - All tests pass: 5 passed, 1 skipped
+- `v0.42.6-community.3` (2026-04-26): Fix admin incidents response format
+  - Changed `/api/admin/incidents` to return array `[]` instead of `{items: []}`
+  - Frontend expects array for `.filter()` method
+- `v0.42.6-community.2` (2026-04-25): Add graceful fallbacks for admin and ratings APIs
+  - Added `BABYLON_ADMIN_ENABLED` and `BABYLON_RATINGS_ENABLED` env vars
+  - Fixed `/api/user-manager/bookmarks` endpoints
 - `v0.42.6-community.1` (2026-04-23): Initial release with Salesforce fallback logic
+  - Added `SALESFORCE_ENABLED` and `DEFAULT_CATALOG_NAMESPACES` env vars
 
 ## Contributing Back to Upstream
 
